@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ShieldScan — Link Safety Checker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #060a10;
+      --surface: #0d1321;
+      --surface2: #111827;
+      --border: rgba(99,179,255,0.1);
+      --accent: #3b82f6;
+      --accent2: #06b6d4;
+      --safe: #10b981;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+      --unknown: #8b5cf6;
+      --text: #e2e8f0;
+      --muted: #64748b;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:var(--bg); color:var(--text); font-family:'Syne',sans-serif; min-height:100vh; overflow-x:hidden; }
+    body::before { content:''; position:fixed; inset:0; background-image:linear-gradient(rgba(59,130,246,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(59,130,246,0.025) 1px,transparent 1px); background-size:48px 48px; pointer-events:none; z-index:0; }
+    #bgCanvas { position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:0; }
+    .float-label { position:fixed; font-family:"DM Mono",monospace; font-size:11px; padding:4px 10px; border-radius:8px; border:1px solid; pointer-events:none; z-index:1; animation:floatPulse 6s ease-in-out infinite; white-space:nowrap; }
+    .float-label.safe  { color:#10b981; border-color:rgba(16,185,129,0.3);  background:rgba(16,185,129,0.06);  }
+    .float-label.warn  { color:#f59e0b; border-color:rgba(245,158,11,0.3);  background:rgba(245,158,11,0.06);  }
+    .float-label.danger{ color:#ef4444; border-color:rgba(239,68,68,0.3);   background:rgba(239,68,68,0.06);   }
+    .float-label.info  { color:#3b82f6; border-color:rgba(59,130,246,0.3);  background:rgba(59,130,246,0.06);  }
+    @keyframes floatPulse { 0%,100%{opacity:0;transform:translateY(8px)} 25%,75%{opacity:1;transform:translateY(0)} }
+
+    /* ══ PAGES ══════════════════════════════════════════════════════════════ */
+    .page { display:none; position:relative; z-index:1; min-height:100vh; }
+    .page.active { display:flex; }
+
+    /* ══ AUTH PAGE ══════════════════════════════════════════════════════════ */
+    #authPage { align-items:center; justify-content:center; padding:24px; }
+    .auth-card {
+      width:100%; max-width:440px;
+      background:var(--surface);
+      border:1px solid var(--border);
+      border-radius:20px;
+      padding:44px 40px;
+      box-shadow:0 40px 100px rgba(0,0,0,0.5), 0 0 0 1px rgba(59,130,246,0.05);
+      animation: fadeUp 0.5s ease;
+    }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:none} }
+    .auth-logo { display:flex; align-items:center; gap:12px; margin-bottom:32px; }
+    .auth-logo-icon { width:46px;height:46px; background:linear-gradient(135deg,var(--accent),var(--accent2)); border-radius:12px; display:flex;align-items:center;justify-content:center; font-size:22px; box-shadow:0 0 24px rgba(59,130,246,0.3); }
+    .auth-logo-text { font-size:22px; font-weight:800; letter-spacing:-0.5px; }
+    .auth-logo-text span { color:var(--accent2); }
+    .auth-tabs { display:flex; gap:0; margin-bottom:28px; background:var(--surface2); border-radius:10px; padding:4px; }
+    .auth-tab { flex:1; padding:9px; text-align:center; cursor:pointer; border-radius:7px; font-size:14px; font-weight:600; color:var(--muted); transition:all 0.2s; }
+    .auth-tab.active { background:var(--accent); color:white; box-shadow:0 4px 12px rgba(59,130,246,0.3); }
+    .auth-form { display:none; flex-direction:column; gap:16px; }
+    .auth-form.active { display:flex; }
+    .field label { display:block; font-size:12px; color:var(--muted); margin-bottom:6px; letter-spacing:0.5px; font-family:'DM Mono',monospace; }
+    .field input {
+      width:100%; background:var(--surface2); border:1px solid var(--border);
+      border-radius:9px; padding:12px 14px; font-family:'DM Mono',monospace;
+      font-size:14px; color:var(--text); outline:none; transition:border-color 0.2s;
+    }
+    .field input:focus { border-color:rgba(59,130,246,0.5); box-shadow:0 0 0 3px rgba(59,130,246,0.08); }
+    .auth-btn {
+      background:linear-gradient(135deg,var(--accent),var(--accent2));
+      border:none; border-radius:10px; color:white;
+      font-family:'Syne',sans-serif; font-size:15px; font-weight:700;
+      padding:14px; cursor:pointer; transition:opacity 0.2s,transform 0.1s;
+      margin-top:4px;
+    }
+    .auth-btn:hover { opacity:0.9; }
+    .auth-btn:active { transform:scale(0.98); }
+    .auth-btn:disabled { opacity:0.5; cursor:not-allowed; }
+    .auth-error { background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.25); color:#fca5a5; padding:12px 14px; border-radius:8px; font-size:13px; display:none; }
+    .auth-error.show { display:block; }
+    .auth-note { font-size:12px; color:var(--muted); text-align:center; font-family:'DM Mono',monospace; }
+    .auth-note strong { color:var(--accent2); }
+
+    /* ══ APP SHELL ══════════════════════════════════════════════════════════ */
+    #appPage { flex-direction:column; }
+    .topbar {
+      background:rgba(13,19,33,0.95);
+      border-bottom:1px solid var(--border);
+      backdrop-filter:blur(12px);
+      position:sticky; top:0; z-index:100;
+      padding:0 24px;
+      display:flex; align-items:center; justify-content:space-between;
+      height:60px;
+    }
+    .topbar-logo { display:flex; align-items:center; gap:10px; }
+    .topbar-logo-icon { width:32px;height:32px; background:linear-gradient(135deg,var(--accent),var(--accent2)); border-radius:8px; display:flex;align-items:center;justify-content:center; font-size:16px; }
+    .topbar-logo-text { font-size:17px; font-weight:800; }
+    .topbar-logo-text span { color:var(--accent2); }
+    .topbar-right { display:flex; align-items:center; gap:12px; }
+    .user-pill {
+      display:flex; align-items:center; gap:8px;
+      background:var(--surface2); border:1px solid var(--border);
+      padding:5px 12px 5px 5px; border-radius:20px;
+    }
+    .user-avatar {
+      width:28px;height:28px; border-radius:50%;
+      background:linear-gradient(135deg,var(--accent),var(--accent2));
+      display:flex;align-items:center;justify-content:center;
+      font-size:13px; font-weight:700; color:white;
+    }
+    .user-name { font-size:13px; font-weight:600; }
+    .user-role { font-size:10px; color:var(--accent2); font-family:'DM Mono',monospace; }
+    .nav-btn {
+      background:none; border:1px solid var(--border);
+      color:var(--muted); border-radius:8px;
+      padding:7px 14px; font-family:'Syne',sans-serif;
+      font-size:13px; cursor:pointer; transition:all 0.2s;
+    }
+    .nav-btn:hover { border-color:var(--accent); color:var(--accent); }
+    .nav-btn.active { background:rgba(59,130,246,0.1); border-color:var(--accent); color:var(--accent); }
+    .logout-btn {
+      background:none; border:1px solid rgba(239,68,68,0.3);
+      color:var(--danger); border-radius:8px;
+      padding:7px 14px; font-family:'Syne',sans-serif;
+      font-size:13px; cursor:pointer; transition:all 0.2s;
+    }
+    .logout-btn:hover { background:rgba(239,68,68,0.08); }
+
+    /* ══ CONTENT TABS ═══════════════════════════════════════════════════════ */
+    .content-area { flex:1; }
+    .tab-content { display:none; }
+    .tab-content.active { display:block; }
+
+    /* ══ SCANNER TAB ════════════════════════════════════════════════════════ */
+    .scanner-wrap { max-width:860px; margin:0 auto; padding:40px 24px; }
+    .scanner-hero { text-align:center; margin-bottom:40px; }
+    .scanner-hero h1 { font-size:clamp(28px,5vw,48px); font-weight:800; letter-spacing:-1.5px; margin-bottom:10px; }
+    .scanner-hero h1 .hl { background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .scanner-hero p { color:var(--muted); font-size:15px; }
+    .scanner-hero .welcome-name { color:var(--accent2); font-weight:700; }
+
+    .scan-box {
+      background:var(--surface); border:1px solid var(--border); border-radius:14px;
+      padding:5px 5px 5px 18px; display:flex; gap:8px; align-items:center;
+      box-shadow:0 0 40px rgba(59,130,246,0.07), 0 20px 60px rgba(0,0,0,0.4);
+      transition:border-color 0.3s,box-shadow 0.3s;
+    }
+    .scan-box:focus-within { border-color:rgba(59,130,246,0.4); box-shadow:0 0 0 4px rgba(59,130,246,0.08),0 20px 60px rgba(0,0,0,0.4); }
+    .scan-box input { flex:1; background:none; border:none; outline:none; font-family:'DM Mono',monospace; font-size:14px; color:var(--text); padding:10px 0; }
+    .scan-box input::placeholder { color:var(--muted); }
+    .scan-btn { background:linear-gradient(135deg,var(--accent),var(--accent2)); border:none; border-radius:9px; color:white; font-family:'Syne',sans-serif; font-size:14px; font-weight:700; padding:11px 26px; cursor:pointer; transition:opacity 0.2s,transform 0.1s; white-space:nowrap; }
+    .scan-btn:hover { opacity:0.9; }
+    .scan-btn:active { transform:scale(0.97); }
+    .scan-btn:disabled { opacity:0.5; cursor:not-allowed; }
+
+    .loading { display:none; text-align:center; padding:60px 0; }
+    .loading.show { display:block; }
+    .spinner-wrap { position:relative; width:72px;height:72px; margin:0 auto 20px; }
+    .spinner { width:72px;height:72px; border-radius:50%; border:2px solid var(--border); border-top-color:var(--accent); animation:spin 0.8s linear infinite; }
+    .spinner-inner { position:absolute;top:14px;left:14px; width:44px;height:44px; border-radius:50%; border:2px solid transparent; border-top-color:var(--accent2); animation:spin 0.5s linear infinite reverse; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+    .loading-text { color:var(--muted); font-size:14px; }
+    .loading-step { font-family:'DM Mono',monospace; font-size:12px; color:var(--accent); margin-top:6px; min-height:16px; }
+
+    .result { display:none; animation:fadeUp 0.5s ease; margin-top:28px; }
+    .result.show { display:block; }
+
+    .verdict-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; overflow:hidden; margin-bottom:18px; }
+    .verdict-header { padding:24px 28px; display:flex; align-items:center; gap:18px; position:relative; overflow:hidden; }
+    .verdict-header::before { content:''; position:absolute;inset:0; opacity:0.07; }
+    .verdict-header.safe::before{background:var(--safe);}
+    .verdict-header.suspicious::before{background:var(--warn);}
+    .verdict-header.dangerous::before{background:var(--danger);}
+    .verdict-header.unknown::before{background:var(--unknown);}
+    .verdict-icon { font-size:40px; animation:popIn 0.5s cubic-bezier(0.34,1.56,0.64,1); }
+    @keyframes popIn{from{transform:scale(0)}to{transform:scale(1)}}
+    .verdict-info { flex:1; }
+    .verdict-label { font-size:11px; font-family:'DM Mono',monospace; letter-spacing:2px; text-transform:uppercase; color:var(--muted); margin-bottom:3px; }
+    .verdict-title { font-size:24px; font-weight:800; letter-spacing:-0.5px; }
+    .verdict-title.safe{color:var(--safe);} .verdict-title.suspicious{color:var(--warn);} .verdict-title.dangerous{color:var(--danger);} .verdict-title.unknown{color:var(--unknown);}
+    .risk-meter { text-align:right; }
+    .risk-number { font-size:38px; font-weight:800; font-family:'DM Mono',monospace; line-height:1; }
+    .risk-number.safe{color:var(--safe);} .risk-number.suspicious{color:var(--warn);} .risk-number.dangerous{color:var(--danger);} .risk-number.unknown{color:var(--unknown);}
+    .risk-label { font-size:10px; color:var(--muted); font-family:'DM Mono',monospace; letter-spacing:1px; }
+    .verdict-body { padding:0 28px 24px; }
+    .scanned-url { font-family:'DM Mono',monospace; font-size:12px; color:var(--muted); background:var(--surface2); border:1px solid var(--border); padding:9px 13px; border-radius:7px; margin-bottom:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .ai-summary { font-size:14px; line-height:1.7; color:var(--text); margin-bottom:16px; padding:14px 16px; background:var(--surface2); border-radius:9px; border-left:3px solid var(--accent); }
+    .reasons-list { list-style:none; display:flex; flex-direction:column; gap:7px; margin-bottom:16px; }
+    .reasons-list li { display:flex; align-items:flex-start; gap:9px; font-size:13px; color:var(--muted); line-height:1.5; }
+    .reasons-list li::before { content:'→'; color:var(--accent); flex-shrink:0; }
+    .checks-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
+    .check-item { background:var(--surface2); border:1px solid var(--border); border-radius:9px; padding:12px 14px; }
+    .check-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:7px; }
+    .check-name { font-size:11px; color:var(--muted); font-family:'DM Mono',monospace; }
+    .check-badge { font-size:10px; padding:2px 7px; border-radius:10px; font-family:'DM Mono',monospace; }
+    .check-badge.clean{background:rgba(16,185,129,0.15);color:var(--safe);}
+    .check-badge.flagged{background:rgba(239,68,68,0.15);color:var(--danger);}
+    .check-badge.skipped{background:rgba(100,116,139,0.2);color:var(--muted);}
+    .check-badge.warn{background:rgba(245,158,11,0.15);color:var(--warn);}
+    .progress-bar { height:3px; background:var(--surface); border-radius:2px; overflow:hidden; }
+    .progress-fill { height:100%; border-radius:2px; transition:width 1s cubic-bezier(0.4,0,0.2,1); width:0; }
+    .progress-fill.safe{background:var(--safe);} .progress-fill.warn{background:var(--warn);} .progress-fill.danger{background:var(--danger);}
+    .check-value { font-size:12px; font-weight:600; margin-bottom:5px; }
+    .recommendation { padding:12px 16px; border-radius:9px; font-size:13px; line-height:1.6; margin-top:14px; display:flex; gap:9px; align-items:flex-start; }
+    .recommendation.safe{background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);}
+    .recommendation.suspicious{background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);}
+    .recommendation.dangerous{background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);}
+    .recommendation.unknown{background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);}
+    .rec-icon { font-size:16px; flex-shrink:0; }
+
+    /* ══ MY SCANS TAB ═══════════════════════════════════════════════════════ */
+    .dashboard-wrap { max-width:960px; margin:0 auto; padding:36px 24px; }
+    .dash-header { margin-bottom:28px; }
+    .dash-header h2 { font-size:24px; font-weight:800; letter-spacing:-0.5px; margin-bottom:4px; }
+    .dash-header p { color:var(--muted); font-size:14px; font-family:'DM Mono',monospace; }
+
+    .stats-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:28px; }
+    .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; }
+    .stat-num { font-size:28px; font-weight:800; font-family:'DM Mono',monospace; }
+    .stat-lbl { font-size:11px; color:var(--muted); margin-top:4px; letter-spacing:0.5px; }
+
+    .scans-table-wrap { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+    .table-header { padding:16px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+    .table-title { font-size:14px; font-weight:700; }
+    .table-sub { font-size:12px; color:var(--muted); font-family:'DM Mono',monospace; }
+    table { width:100%; border-collapse:collapse; }
+    th { padding:12px 16px; text-align:left; font-size:11px; letter-spacing:1px; color:var(--muted); font-family:'DM Mono',monospace; border-bottom:1px solid var(--border); }
+    td { padding:13px 16px; font-size:13px; border-bottom:1px solid rgba(99,179,255,0.05); }
+    tr:last-child td { border-bottom:none; }
+    tr:hover td { background:rgba(59,130,246,0.03); }
+    .url-cell { font-family:'DM Mono',monospace; font-size:12px; max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); }
+    .badge { display:inline-block; font-size:10px; padding:3px 9px; border-radius:12px; font-family:'DM Mono',monospace; font-weight:500; text-transform:uppercase; letter-spacing:1px; }
+    .badge.safe{background:rgba(16,185,129,0.15);color:var(--safe);}
+    .badge.dangerous{background:rgba(239,68,68,0.15);color:var(--danger);}
+    .badge.suspicious{background:rgba(245,158,11,0.15);color:var(--warn);}
+    .badge.unknown{background:rgba(139,92,246,0.15);color:var(--unknown);}
+    .score-cell { font-family:'DM Mono',monospace; font-weight:600; }
+    .score-cell.safe{color:var(--safe);} .score-cell.dangerous{color:var(--danger);} .score-cell.suspicious{color:var(--warn);}
+    .time-cell { color:var(--muted); font-size:11px; font-family:'DM Mono',monospace; white-space:nowrap; }
+
+    /* ══ ADMIN TAB ══════════════════════════════════════════════════════════ */
+    .admin-wrap { max-width:1100px; margin:0 auto; padding:36px 24px; }
+    .admin-header { margin-bottom:28px; display:flex; align-items:center; justify-content:space-between; }
+    .admin-header h2 { font-size:24px; font-weight:800; }
+    .admin-badge { background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:var(--danger); padding:4px 12px; border-radius:12px; font-size:11px; font-family:'DM Mono',monospace; letter-spacing:1px; }
+
+    .global-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:28px; }
+    .gstat-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; }
+    .gstat-num { font-size:32px; font-weight:800; font-family:'DM Mono',monospace; }
+    .gstat-lbl { font-size:11px; color:var(--muted); margin-top:4px; letter-spacing:0.5px; }
+
+    .users-table-wrap { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:28px; }
+    .expandable-row { cursor:pointer; }
+    .expandable-row:hover td { background:rgba(59,130,246,0.05); }
+    .expand-detail { display:none; }
+    .expand-detail.open { display:table-row; }
+    .expand-cell { padding:0 !important; border-bottom:1px solid var(--border) !important; }
+    .expand-inner { padding:16px 20px; background:rgba(59,130,246,0.03); }
+    .mini-scans { display:flex; flex-direction:column; gap:6px; max-height:200px; overflow-y:auto; }
+    .mini-scan { display:flex; gap:12px; align-items:center; font-size:12px; font-family:'DM Mono',monospace; color:var(--muted); padding:6px 0; border-bottom:1px solid rgba(99,179,255,0.05); }
+    .mini-dot { width:7px;height:7px; border-radius:50%; flex-shrink:0; }
+    .mini-dot.safe{background:var(--safe);} .mini-dot.dangerous{background:var(--danger);} .mini-dot.suspicious{background:var(--warn);} .mini-dot.unknown{background:var(--unknown);}
+    .mini-url { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .del-btn { background:none; border:1px solid rgba(239,68,68,0.3); color:var(--danger); border-radius:6px; padding:3px 9px; font-size:11px; cursor:pointer; font-family:'DM Mono',monospace; }
+    .del-btn:hover { background:rgba(239,68,68,0.1); }
+
+    .empty-state { text-align:center; padding:48px 24px; color:var(--muted); font-size:14px; }
+    .empty-icon { font-size:40px; margin-bottom:12px; }
+
+    .error-bar { background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.25); color:#fca5a5; padding:12px 16px; border-radius:9px; font-size:13px; margin-top:12px; display:none; }
+    .error-bar.show { display:block; }
+
+    @media(max-width:640px) {
+      .auth-card { padding:32px 24px; }
+      .topbar { padding:0 16px; }
+      .nav-btn { display:none; }
+      .verdict-header { flex-direction:column; text-align:center; }
+      .risk-meter { text-align:center; }
+      .stats-row { grid-template-columns:repeat(2,1fr); }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="bgCanvas"></canvas>
+
+
+  <!-- ══ AUTH PAGE ═══════════════════════════════════════════════════════════ -->
+  <div class="page active" id="authPage">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <div class="auth-logo-icon">🛡️</div>
+        <div class="auth-logo-text">Shield<span>Scan</span></div>
+      </div>
+
+      <div class="auth-tabs">
+        <div class="auth-tab active" onclick="switchTab('login')">Sign In</div>
+        <div class="auth-tab" onclick="switchTab('register')">Create Account</div>
+      </div>
+
+      <!-- Login Form -->
+      <form class="auth-form active" id="loginForm" onsubmit="handleLogin(event)">
+        <div id="loginError" class="auth-error"></div>
+        <div class="field">
+          <label>EMAIL</label>
+          <input type="email" id="loginEmail" placeholder="you@example.com" required/>
+        </div>
+        <div class="field">
+          <label>PASSWORD</label>
+          <input type="password" id="loginPass" placeholder="••••••••" required/>
+        </div>
+        <button type="submit" class="auth-btn" id="loginBtn">Sign In →</button>
+        <div class="auth-note">🔐 Contact your administrator to get access</div>
+      </form>
+
+      <!-- Register Form -->
+      <form class="auth-form" id="registerForm" onsubmit="handleRegister(event)">
+        <div id="registerError" class="auth-error"></div>
+        <div class="field">
+          <label>USERNAME</label>
+          <input type="text" id="regUsername" placeholder="yourname" required/>
+        </div>
+        <div class="field">
+          <label>EMAIL</label>
+          <input type="email" id="regEmail" placeholder="you@example.com" required/>
+        </div>
+        <div class="field">
+          <label>PASSWORD</label>
+          <input type="password" id="regPass" placeholder="Min 6 characters" required/>
+        </div>
+        <button type="submit" class="auth-btn" id="registerBtn">Create Account →</button>
+        <div class="auth-note">🔐 Contact your administrator to get access</div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ══ APP PAGE ════════════════════════════════════════════════════════════ -->
+  <div class="page" id="appPage">
+    <!-- Topbar -->
+    <div class="topbar">
+      <div class="topbar-logo">
+        <div class="topbar-logo-icon">🛡️</div>
+        <div class="topbar-logo-text">Shield<span>Scan</span></div>
+      </div>
+      <div class="topbar-right">
+        <button class="nav-btn active" id="btnScanner" onclick="showTab('scanner')">Scanner</button>
+        <button class="nav-btn" id="btnMyScans" onclick="showTab('myScans')">My Scans</button>
+        <button class="nav-btn" id="btnAdmin" id="btnAdmin" onclick="showTab('admin')" style="display:none">Admin</button>
+        <div class="user-pill">
+          <div class="user-avatar" id="userAvatar">?</div>
+          <div>
+            <div class="user-name" id="userName">—</div>
+            <div class="user-role" id="userRole">—</div>
+          </div>
+        </div>
+        <button class="logout-btn" onclick="handleLogout()">Logout</button>
+      </div>
+    </div>
+
+    <div class="content-area">
+      <!-- ── Scanner Tab ─────────────────────────────────────────────────── -->
+      <div class="tab-content active" id="tab-scanner">
+        <div class="scanner-wrap">
+          <div class="scanner-hero">
+            <h1>Check if a link is <span class="hl">safe</span> or a <span class="hl">scam</span></h1>
+            <p>Welcome back, <span class="welcome-name" id="welcomeName"></span> — paste any URL below</p>
+          </div>
+
+          <div class="scan-box">
+            <input type="text" id="urlInput" placeholder="https://suspicious-link.com/login" autocomplete="off" spellcheck="false"/>
+            <button class="scan-btn" id="scanBtn" onclick="startScan()">Scan Now</button>
+          </div>
+          <div id="scanError" class="error-bar"></div>
+
+          <div class="loading" id="loading">
+            <div class="spinner-wrap"><div class="spinner"></div><div class="spinner-inner"></div></div>
+            <div class="loading-text">Analyzing link...</div>
+            <div class="loading-step" id="loadingStep"></div>
+          </div>
+
+          <div class="result" id="result">
+            <div class="verdict-card">
+              <div class="verdict-header" id="verdictHeader">
+                <div class="verdict-icon" id="verdictIcon"></div>
+                <div class="verdict-info">
+                  <div class="verdict-label">Security Assessment</div>
+                  <div class="verdict-title" id="verdictTitle"></div>
+                </div>
+                <div class="risk-meter">
+                  <div class="risk-number" id="riskNumber">0</div>
+                  <div class="risk-label">RISK SCORE / 100</div>
+                </div>
+              </div>
+              <div class="verdict-body">
+                <div class="scanned-url" id="scannedUrl"></div>
+                <div class="ai-summary" id="aiSummary"></div>
+                <ul class="reasons-list" id="reasonsList"></ul>
+                <div class="checks-grid">
+                  <div class="check-item">
+                    <div class="check-header"><span class="check-name">VirusTotal</span><span class="check-badge" id="vtBadge">—</span></div>
+                    <div class="check-value" id="vtValue">—</div>
+                    <div class="progress-bar"><div class="progress-fill" id="vtBar"></div></div>
+                  </div>
+                  <div class="check-item">
+                    <div class="check-header"><span class="check-name">Google Safe Browsing</span><span class="check-badge" id="gsbBadge">—</span></div>
+                    <div class="check-value" id="gsbValue">—</div>
+                    <div class="progress-bar"><div class="progress-fill" id="gsbBar"></div></div>
+                  </div>
+                  <div class="check-item">
+                    <div class="check-header"><span class="check-name">Claude AI</span><span class="check-badge" id="aiBadge">—</span></div>
+                    <div class="check-value" id="aiValue">—</div>
+                    <div class="progress-bar"><div class="progress-fill" id="aiBar"></div></div>
+                  </div>
+                </div>
+                <div class="recommendation" id="recommendation">
+                  <span class="rec-icon" id="recIcon"></span>
+                  <span id="recText"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── My Scans Tab ───────────────────────────────────────────────── -->
+      <div class="tab-content" id="tab-myScans">
+        <div class="dashboard-wrap">
+          <div class="dash-header">
+            <h2>My Scan History</h2>
+            <p id="myLastScan">Loading...</p>
+          </div>
+
+          <div class="stats-row">
+            <div class="stat-card">
+              <div class="stat-num" id="myTotal" style="color:var(--accent)">—</div>
+              <div class="stat-lbl">TOTAL SCANS</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-num" id="mySafe" style="color:var(--safe)">—</div>
+              <div class="stat-lbl">SAFE</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-num" id="myWarn" style="color:var(--warn)">—</div>
+              <div class="stat-lbl">SUSPICIOUS</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-num" id="myDanger" style="color:var(--danger)">—</div>
+              <div class="stat-lbl">DANGEROUS</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-num" id="myAvg" style="color:var(--unknown)">—</div>
+              <div class="stat-lbl">AVG RISK</div>
+            </div>
+          </div>
+
+          <div class="scans-table-wrap">
+            <div class="table-header">
+              <div class="table-title">Recent Scans</div>
+              <div class="table-sub" id="myScanCount">—</div>
+            </div>
+            <div id="myScansBody"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Admin Tab ─────────────────────────────────────────────────── -->
+      <div class="tab-content" id="tab-admin">
+        <div class="admin-wrap">
+          <div class="admin-header">
+            <h2>Admin Dashboard</h2>
+            <span class="admin-badge">ADMIN ONLY</span>
+          </div>
+
+          <div class="global-stats" id="globalStatsRow"></div>
+
+          <div class="users-table-wrap">
+            <div class="table-header">
+              <div class="table-title">All Users</div>
+              <div class="table-sub" id="totalUsersLabel">—</div>
+            </div>
+            <div id="usersTableBody"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // ── State ────────────────────────────────────────────────────────────────
+  let currentUser = null;
+
+  const VERDICTS = {
+    safe:       { icon:'✅', label:'Safe to Visit',   color:'safe' },
+    suspicious: { icon:'⚠️', label:'Suspicious Link', color:'suspicious' },
+    dangerous:  { icon:'🚫', label:'Dangerous Link',  color:'dangerous' },
+    unknown:    { icon:'❓', label:'Unknown',          color:'unknown' }
+  };
+
+  const STEPS = ['Submitting to VirusTotal...','Checking Google Safe Browsing...','Running Claude AI analysis...','Calculating risk score...','Saving to database...'];
+  let stepIdx = 0, stepInt;
+
+  // ── Auth helpers ─────────────────────────────────────────────────────────
+  async function api(method, url, body) {
+    const opts = { method, headers:{'Content-Type':'application/json'}, credentials:'include' };
+    if (body) opts.body = JSON.stringify(body);
+    const r = await fetch(url, opts);
+    const d = await r.json();
+    if (!r.ok) {
+      const err = new Error(d.error || 'Request failed');
+      err.unverified = d.unverified || false;
+      throw err;
+    }
+    return d;
+  }
+
+  async function checkSession() {
+    try {
+      const { user } = await api('GET', '/api/auth/me');
+      currentUser = user;
+      enterApp();
+    } catch {
+      showAuthPage();
+    }
+  }
+
+  function showAuthPage() { document.getElementById('authPage').classList.add('active'); document.getElementById('appPage').classList.remove('active'); }
+  function showAppPage()  { document.getElementById('authPage').classList.remove('active'); document.getElementById('appPage').classList.add('active'); }
+
+  function switchTab(tab) {
+    document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+    document.querySelectorAll('.auth-error').forEach(e => { e.classList.remove('show'); e.textContent=''; });
+    if (tab === 'login') {
+      document.querySelectorAll('.auth-tab')[0].classList.add('active');
+      document.getElementById('loginForm').classList.add('active');
+    } else {
+      document.querySelectorAll('.auth-tab')[1].classList.add('active');
+      document.getElementById('registerForm').classList.add('active');
+    }
+  }
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    const btn = document.getElementById('loginBtn');
+    const err = document.getElementById('loginError');
+    btn.disabled = true; btn.textContent = 'Signing in...';
+    err.classList.remove('show');
+    try {
+      const { user } = await api('POST','/api/auth/login',{ email:document.getElementById('loginEmail').value, password:document.getElementById('loginPass').value });
+      currentUser = user;
+      enterApp();
+    } catch(ex) {
+      err.textContent = ex.message; err.classList.add('show');
+      if (ex.unverified) {
+        err.innerHTML = ex.message + '<br><small style="opacity:0.8">Check your inbox or terminal (dev mode).</small>';
+      }
+    } finally {
+      btn.disabled = false; btn.textContent = 'Sign In →';
+    }
+  }
+
+  async function handleRegister(e) {
+    e.preventDefault();
+    const btn = document.getElementById('registerBtn');
+    const err = document.getElementById('registerError');
+    btn.disabled = true; btn.textContent = 'Creating account...';
+    err.classList.remove('show');
+    try {
+      const data = await api('POST','/api/auth/register',{
+        username: document.getElementById('regUsername').value,
+        email: document.getElementById('regEmail').value,
+        password: document.getElementById('regPass').value
+      });
+      // Show verification pending screen
+      showVerifyPending(data);
+    } catch(ex) {
+      err.textContent = ex.message; err.classList.add('show');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Create Account →';
+    }
+  }
+
+  function showVerifyPending(data) {
+    const card = document.querySelector('.auth-card');
+    card.innerHTML = `
+      <div style="text-align:center;padding:12px 0;">
+        <div style="font-size:52px;margin-bottom:16px;">📧</div>
+        <div style="font-size:22px;font-weight:800;color:#e2e8f0;margin-bottom:12px;">Check your email!</div>
+        <p style="color:#64748b;font-size:14px;line-height:1.7;margin:0 0 20px;">
+          ${data.message}
+        </p>
+        ${data.devMode ? `
+        <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:10px;padding:14px;margin-bottom:20px;text-align:left;">
+          <div style="font-size:11px;color:#64748b;font-family:'DM Mono',monospace;margin-bottom:6px;">DEV MODE — Click to verify instantly:</div>
+          <a href="${data.devVerifyUrl}" target="_blank"
+             style="font-size:12px;color:#3b82f6;font-family:'DM Mono',monospace;word-break:break-all;text-decoration:none;">
+            ${data.devVerifyUrl}
+          </a>
+        </div>` : ''}
+        <button onclick="location.reload()" 
+          style="background:linear-gradient(135deg,#3b82f6,#06b6d4);border:none;border-radius:10px;color:white;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;padding:12px 28px;cursor:pointer;">
+          Back to Login →
+        </button>
+      </div>`;
+  }
+
+  async function handleLogout() {
+    await api('POST','/api/auth/logout');
+    currentUser = null;
+    document.getElementById('result').classList.remove('show');
+    document.getElementById('urlInput').value = '';
+    showAuthPage();
+  }
+
+  function enterApp() {
+    showAppPage();
+    document.getElementById('userName').textContent = currentUser.username;
+    document.getElementById('userRole').textContent = currentUser.role.toUpperCase();
+    document.getElementById('userAvatar').textContent = currentUser.username[0].toUpperCase();
+    document.getElementById('welcomeName').textContent = currentUser.username;
+
+    const adminBtn = document.getElementById('btnAdmin');
+    if (currentUser.role === 'admin') adminBtn.style.display = 'block';
+
+    showTab('scanner');
+    loadMyStats();
+  }
+
+  // ── Tab navigation ───────────────────────────────────────────────────────
+  function showTab(tab) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    document.getElementById('btn' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+    if (tab === 'myScans') loadMyScans();
+    if (tab === 'admin') loadAdmin();
+  }
+
+  // ── Scanner ──────────────────────────────────────────────────────────────
+  async function startScan() {
+    const url = document.getElementById('urlInput').value.trim();
+    if (!url) { showScanError('Please enter a URL.'); return; }
+    hideScanError();
+    showLoading(true);
+    document.getElementById('result').classList.remove('show');
+    stepIdx = 0; cycleStep();
+    stepInt = setInterval(cycleStep, 1800);
+    try {
+      const data = await api('POST','/api/scan',{ url });
+      clearInterval(stepInt);
+      showLoading(false);
+      renderResult(data);
+    } catch(err) {
+      clearInterval(stepInt);
+      showLoading(false);
+      showScanError('Error: ' + err.message);
+    }
+  }
+
+  function cycleStep() { document.getElementById('loadingStep').textContent = STEPS[stepIdx++ % STEPS.length]; }
+  function showLoading(s) { document.getElementById('loading').classList.toggle('show',s); document.getElementById('scanBtn').disabled = s; }
+  function showScanError(m) { const e=document.getElementById('scanError'); e.textContent=m; e.classList.add('show'); }
+  function hideScanError() { document.getElementById('scanError').classList.remove('show'); }
+
+  function renderResult(d) {
+    const v = VERDICTS[d.verdict] || VERDICTS.unknown;
+    document.getElementById('verdictHeader').className = 'verdict-header ' + v.color;
+    document.getElementById('verdictIcon').textContent = v.icon;
+    const title = document.getElementById('verdictTitle');
+    title.className = 'verdict-title ' + v.color;
+    title.textContent = v.label;
+    const riskEl = document.getElementById('riskNumber');
+    riskEl.className = 'risk-number ' + v.color;
+    animNum(riskEl, 0, d.risk_score || 0, 800);
+    document.getElementById('scannedUrl').textContent = d.url;
+    document.getElementById('aiSummary').textContent = d.ai_analysis || 'No AI summary.';
+    const list = document.getElementById('reasonsList');
+    list.innerHTML = '';
+    (d.ai_reasons||[]).forEach(r => { const li=document.createElement('li'); li.textContent=r; list.appendChild(li); });
+
+    const vtPct = d.vt_total > 0 ? Math.round(d.vt_positives/d.vt_total*100) : 0;
+    document.getElementById('vtValue').textContent = d.vt_total > 0 ? `${d.vt_positives}/${d.vt_total} engines flagged` : 'Not scanned';
+    setBadge('vtBadge', d.vt_positives>0?'flagged':(d.vt_total>0?'clean':'skipped'), d.vt_positives>0?`${d.vt_positives} threats`:(d.vt_total>0?'Clean':'N/A'));
+    setBar('vtBar', vtPct, d.vt_positives>4?'danger':d.vt_positives>0?'warn':'safe');
+
+    document.getElementById('gsbValue').textContent = d.google_flagged ? '⚠️ Flagged as threat' : 'No threats found';
+    setBadge('gsbBadge', d.google_flagged?'flagged':'clean', d.google_flagged?'Threat':'Clean');
+    setBar('gsbBar', d.google_flagged?100:5, d.google_flagged?'danger':'safe');
+
+    const aiScore = {safe:5,unknown:30,suspicious:60,dangerous:90}[d.ai_verdict]||30;
+    document.getElementById('aiValue').textContent = 'Claude verdict: ' + (d.ai_verdict||'unknown');
+    setBadge('aiBadge', d.ai_verdict==='safe'?'clean':d.ai_verdict==='dangerous'?'flagged':d.ai_verdict==='suspicious'?'warn':'skipped', d.ai_verdict||'unknown');
+    setBar('aiBar', aiScore, aiScore>60?'danger':aiScore>25?'warn':'safe');
+
+    const rec = document.getElementById('recommendation');
+    rec.className = 'recommendation ' + v.color;
+    document.getElementById('recIcon').textContent = v.icon;
+    document.getElementById('recText').textContent = d.ai_recommendation || defaultRec(d.verdict);
+
+    document.getElementById('result').classList.add('show');
+  }
+
+  function defaultRec(v) {
+    return { safe:'This link appears safe. Stay cautious with unexpected links.', suspicious:'Proceed with caution. Avoid entering personal information.', dangerous:'Do NOT visit this link. It may steal data or infect your device.', unknown:'Could not fully determine safety. Exercise caution.' }[v]||'';
+  }
+
+  function setBadge(id, cls, text) { const e=document.getElementById(id); e.className='check-badge '+cls; e.textContent=text; }
+  function setBar(id, pct, cls) { const e=document.getElementById(id); e.className='progress-fill '+cls; setTimeout(()=>e.style.width=Math.min(pct,100)+'%',100); }
+  function animNum(el,from,to,dur) {
+    const start=performance.now();
+    const step=now=>{const t=Math.min((now-start)/dur,1); el.textContent=Math.round(from+(to-from)*(1-Math.pow(1-t,3))); if(t<1)requestAnimationFrame(step);};
+    requestAnimationFrame(step);
+  }
+
+  // ── My Scans ─────────────────────────────────────────────────────────────
+  async function loadMyStats() {
+    try {
+      const s = await api('GET','/api/my-stats');
+      document.getElementById('myTotal').textContent = s.total_scans||0;
+      document.getElementById('mySafe').textContent = s.safe_scans||0;
+      document.getElementById('myWarn').textContent = s.suspicious_scans||0;
+      document.getElementById('myDanger').textContent = s.dangerous_scans||0;
+      document.getElementById('myAvg').textContent = s.avg_risk_score ? Math.round(s.avg_risk_score) : 0;
+      document.getElementById('myLastScan').textContent = s.last_scan_at ? 'Last scan: ' + timeAgo(s.last_scan_at) : 'No scans yet';
+    } catch {}
+  }
+
+  async function loadMyScans() {
+    loadMyStats();
+    try {
+      const scans = await api('GET','/api/my-scans');
+      document.getElementById('myScanCount').textContent = scans.length + ' scans';
+      const body = document.getElementById('myScansBody');
+      if (!scans.length) {
+        body.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div>No scans yet. Go scan a link!</div>';
+        return;
+      }
+      body.innerHTML = `<table><thead><tr><th>URL</th><th>VERDICT</th><th>SCORE</th><th>VT HITS</th><th>AI</th><th>TIME</th></tr></thead><tbody>
+        ${scans.map(s=>`<tr>
+          <td class="url-cell" title="${esc(s.url)}">${esc(s.url)}</td>
+          <td><span class="badge ${s.verdict}">${s.verdict}</span></td>
+          <td class="score-cell ${s.verdict}">${s.risk_score}</td>
+          <td style="font-family:'DM Mono',monospace;font-size:12px">${s.vt_positives||0}/${s.vt_total||0}</td>
+          <td><span class="badge ${s.ai_verdict||'unknown'}">${s.ai_verdict||'unknown'}</span></td>
+          <td class="time-cell">${timeAgo(s.created_at)}</td>
+        </tr>`).join('')}
+      </tbody></table>`;
+    } catch(e) {
+      document.getElementById('myScansBody').innerHTML = '<div class="empty-state">Failed to load scans.</div>';
+    }
+  }
+
+  // ── Admin ────────────────────────────────────────────────────────────────
+  async function loadAdmin() {
+    if (!currentUser || currentUser.role !== 'admin') return;
+    try {
+      const [stats, users] = await Promise.all([
+        api('GET','/api/admin/stats'),
+        api('GET','/api/admin/users')
+      ]);
+
+      document.getElementById('totalUsersLabel').textContent = users.length + ' users registered';
+      document.getElementById('globalStatsRow').innerHTML = `
+        <div class="gstat-card"><div class="gstat-num" style="color:var(--accent)">${stats.total_scans||0}</div><div class="gstat-lbl">TOTAL SCANS</div></div>
+        <div class="gstat-card"><div class="gstat-num" style="color:var(--accent2)">${stats.total_users||0}</div><div class="gstat-lbl">USERS</div></div>
+        <div class="gstat-card"><div class="gstat-num" style="color:var(--safe)">${stats.safe_count||0}</div><div class="gstat-lbl">SAFE</div></div>
+        <div class="gstat-card"><div class="gstat-num" style="color:var(--warn)">${stats.suspicious_count||0}</div><div class="gstat-lbl">SUSPICIOUS</div></div>
+        <div class="gstat-card"><div class="gstat-num" style="color:var(--danger)">${stats.dangerous_count||0}</div><div class="gstat-lbl">DANGEROUS</div></div>
+      `;
+
+      renderUsersTable(users);
+    } catch(e) {
+      document.getElementById('globalStatsRow').innerHTML = '<div style="color:var(--danger);padding:12px">Failed to load admin data: ' + e.message + '</div>';
+    }
+  }
+
+  function renderUsersTable(users) {
+    if (!users.length) {
+      document.getElementById('usersTableBody').innerHTML = '<div class="empty-state"><div class="empty-icon">👤</div>No users yet.</div>';
+      return;
+    }
+    let html = `<table><thead><tr><th>USER</th><th>EMAIL</th><th>ROLE</th><th>TOTAL SCANS</th><th>SAFE</th><th>DANGEROUS</th><th>SUSPICIOUS</th><th>JOINED</th><th>LAST LOGIN</th><th></th></tr></thead><tbody>`;
+    users.forEach(u => {
+      const isMe = u.id === currentUser.id;
+      html += `
+        <tr class="expandable-row" onclick="toggleUserExpand(${u.id})">
+          <td style="font-weight:600">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">${esc(u.username[0].toUpperCase())}</div>
+              ${esc(u.username)} ${isMe?'<span style="font-size:10px;color:var(--accent2);font-family:DM Mono">(you)</span>':''}
+            </div>
+          </td>
+          <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)">${esc(u.email)}</td>
+          <td><span class="badge ${u.role==='admin'?'dangerous':'unknown'}">${u.role}</span></td>
+          <td style="font-family:'DM Mono',monospace;font-weight:700;color:var(--accent)">${u.total_scans||0}</td>
+          <td style="color:var(--safe);font-family:'DM Mono',monospace">${u.safe_scans||0}</td>
+          <td style="color:var(--danger);font-family:'DM Mono',monospace">${u.dangerous_scans||0}</td>
+          <td style="color:var(--warn);font-family:'DM Mono',monospace">${u.suspicious_scans||0}</td>
+          <td class="time-cell">${timeAgo(u.created_at)}</td>
+          <td class="time-cell">${u.last_login ? timeAgo(u.last_login) : 'Never'}</td>
+          <td>${!isMe ? `<button class="del-btn" onclick="event.stopPropagation();deleteUser(${u.id},'${esc(u.username)}')">Delete</button>` : ''}</td>
+        </tr>
+        <tr class="expand-detail" id="expand-${u.id}">
+          <td class="expand-cell" colspan="10">
+            <div class="expand-inner" id="expandInner-${u.id}">
+              <div style="color:var(--muted);font-size:13px;font-family:'DM Mono',monospace">Click to load scans...</div>
+            </div>
+          </td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('usersTableBody').innerHTML = html;
+  }
+
+  const expandedUsers = new Set();
+  async function toggleUserExpand(userId) {
+    const row = document.getElementById('expand-' + userId);
+    const inner = document.getElementById('expandInner-' + userId);
+    if (row.classList.contains('open')) {
+      row.classList.remove('open');
+      expandedUsers.delete(userId);
+      return;
+    }
+    row.classList.add('open');
+    expandedUsers.add(userId);
+    inner.innerHTML = '<div style="color:var(--muted);font-size:12px;font-family:DM Mono">Loading...</div>';
+    try {
+      const { scans, stats } = await api('GET', `/api/admin/users/${userId}/scans`);
+      if (!scans.length) {
+        inner.innerHTML = '<div style="color:var(--muted);font-size:13px;font-family:DM Mono,monospace">No scans yet for this user.</div>';
+        return;
+      }
+      inner.innerHTML = `
+        <div style="margin-bottom:10px;font-size:12px;color:var(--muted);font-family:'DM Mono',monospace">
+          Avg risk: <strong style="color:var(--warn)">${Math.round(stats.avg_risk_score||0)}</strong> &nbsp;·&nbsp;
+          Last scan: <strong style="color:var(--accent)">${stats.last_scan_at ? timeAgo(stats.last_scan_at) : 'N/A'}</strong>
+        </div>
+        <div class="mini-scans">
+          ${scans.map(s=>`
+            <div class="mini-scan">
+              <div class="mini-dot ${s.verdict}"></div>
+              <div class="mini-url">${esc(s.url)}</div>
+              <span class="badge ${s.verdict}" style="flex-shrink:0">${s.verdict}</span>
+              <span style="color:var(--muted);white-space:nowrap">${timeAgo(s.created_at)}</span>
+            </div>
+          `).join('')}
+        </div>`;
+    } catch {
+      inner.innerHTML = '<div style="color:var(--danger);font-size:12px">Failed to load.</div>';
+    }
+  }
+
+  async function deleteUser(id, name) {
+    if (!confirm(`Delete user "${name}" and ALL their scans? This cannot be undone.`)) return;
+    try {
+      await api('DELETE', `/api/admin/users/${id}`);
+      loadAdmin();
+    } catch(e) {
+      alert('Delete failed: ' + e.message);
+    }
+  }
+
+  // ── Utils ────────────────────────────────────────────────────────────────
+  function esc(s='') { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function timeAgo(dt) {
+    if (!dt) return '—';
+    const diff = Date.now() - new Date(dt).getTime();
+    const m = Math.floor(diff/60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return m + 'm ago';
+    const h = Math.floor(m/60);
+    if (h < 24) return h + 'h ago';
+    return Math.floor(h/24) + 'd ago';
+  }
+
+  document.getElementById('urlInput').addEventListener('keydown', e => { if (e.key==='Enter') startScan(); });
+
+  // ── Boot ─────────────────────────────────────────────────────────────────
+  checkSession();
+  </script>
+
+  <script>
+  (function() {
+    const canvas = document.getElementById('bgCanvas');
+    const ctx = canvas.getContext('2d');
+    let w, h, pts = [], beams = [], rings = [];
+    let frame = 0;
+
+    function resize() {
+      w = canvas.width  = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    }
+
+    function initPts() {
+      pts = [];
+      const n = Math.floor((w * h) / 10000);
+      for (let i = 0; i < n; i++) {
+        pts.push({
+          x: Math.random() * w, y: Math.random() * h,
+          vx: (Math.random()-0.5)*0.25, vy: (Math.random()-0.5)*0.25,
+          r: Math.random()*1.4+0.4, phase: Math.random()*Math.PI*2
+        });
+      }
+    }
+
+    function spawnBeam() {
+      beams.push({ y: -10, speed: 0.6+Math.random()*0.5, life: 0, total: h+20 });
+    }
+
+    function spawnRing(x, y) {
+      rings.push({ x, y, r: 0, maxR: 50+Math.random()*50, life: 0, maxLife: 90 });
+    }
+
+    function draw() {
+      frame++;
+      ctx.clearRect(0, 0, w, h);
+
+      // Grid
+      const gs = 48;
+      ctx.strokeStyle = 'rgba(59,130,246,0.028)';
+      ctx.lineWidth = 0.5;
+      for (let x = gs; x < w; x += gs) {
+        ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke();
+      }
+      for (let y = gs; y < h; y += gs) {
+        ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke();
+      }
+
+      // Grid intersection dots
+      ctx.fillStyle = 'rgba(59,130,246,0.07)';
+      for (let x = gs; x < w; x += gs) {
+        for (let y = gs; y < h; y += gs) {
+          ctx.beginPath(); ctx.arc(x,y,0.9,0,Math.PI*2); ctx.fill();
+        }
+      }
+
+      // Particles + connections
+      pts.forEach(p => {
+        p.x += p.vx; p.y += p.vy;
+        if (p.x<0) p.x=w; if (p.x>w) p.x=0;
+        if (p.y<0) p.y=h; if (p.y>h) p.y=0;
+        const brightness = 0.35 + 0.45*(Math.sin(frame*0.018+p.phase)*0.5+0.5);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+        ctx.fillStyle = 'rgba(99,179,255,'+ brightness +')';
+        ctx.fill();
+      });
+
+      // Connection lines between close particles
+      for (let i=0;i<pts.length;i++) {
+        for (let j=i+1;j<pts.length;j++) {
+          const dx=pts[i].x-pts[j].x, dy=pts[i].y-pts[j].y;
+          const d=Math.sqrt(dx*dx+dy*dy);
+          if (d<100) {
+            ctx.strokeStyle='rgba(59,130,246,'+(1-d/100)*0.1+')';
+            ctx.lineWidth=0.5;
+            ctx.beginPath();
+            ctx.moveTo(pts[i].x,pts[i].y);
+            ctx.lineTo(pts[j].x,pts[j].y);
+            ctx.stroke();
+          }
+        }
+      }
+
+      // Scan beams
+      beams.forEach((b,i) => {
+        b.life += b.speed;
+        const t = b.life / b.total;
+        const y = b.life - 10;
+        if (t < 1) {
+          const alpha = Math.sin(t * Math.PI) * 0.35;
+          const grad = ctx.createLinearGradient(0, y, w, y);
+          grad.addColorStop(0, 'rgba(6,182,212,0)');
+          grad.addColorStop(0.3, 'rgba(6,182,212,'+alpha+')');
+          grad.addColorStop(0.5, 'rgba(59,130,246,'+(alpha*1.4)+')');
+          grad.addColorStop(0.7, 'rgba(6,182,212,'+alpha+')');
+          grad.addColorStop(1, 'rgba(6,182,212,0)');
+          ctx.strokeStyle = grad;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke();
+
+          // Moving scan dot
+          const dotX = (w * 0.2) + (w * 0.6) * ((frame * 0.008) % 1);
+          ctx.beginPath();
+          ctx.arc(dotX, y, 2.5, 0, Math.PI*2);
+          ctx.fillStyle = 'rgba(6,182,212,'+(alpha*2.5)+')';
+          ctx.fill();
+        }
+        if (b.life > b.total) {
+          beams.splice(i, 1);
+          if (Math.random() > 0.4) spawnRing(Math.random()*w*0.8+w*0.1, Math.random()*h*0.8+h*0.1);
+        }
+      });
+
+      // Pulse rings
+      rings = rings.filter(r => r.life < r.maxLife);
+      rings.forEach(r => {
+        r.life++;
+        r.r = (r.life/r.maxLife) * r.maxR;
+        const a = (1 - r.life/r.maxLife) * 0.35;
+        ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, Math.PI*2);
+        ctx.strokeStyle = 'rgba(59,130,246,'+a+')';
+        ctx.lineWidth = 1; ctx.stroke();
+
+        // Inner ring
+        if (r.r > 15) {
+          ctx.beginPath(); ctx.arc(r.x, r.y, r.r*0.5, 0, Math.PI*2);
+          ctx.strokeStyle = 'rgba(6,182,212,'+(a*0.5)+')';
+          ctx.lineWidth = 0.5; ctx.stroke();
+        }
+      });
+
+      // Corner brackets
+      const blen = 28, boff = 0;
+      ctx.strokeStyle = 'rgba(59,130,246,0.2)'; ctx.lineWidth = 1.5;
+      [
+        [boff,boff, boff+blen,boff, boff,boff+blen],
+        [w-boff,boff, w-boff-blen,boff, w-boff,boff+blen],
+        [boff,h-boff, boff+blen,h-boff, boff,h-boff-blen],
+        [w-boff,h-boff, w-boff-blen,h-boff, w-boff,h-boff-blen]
+      ].forEach(([x1,y1,x2,y2,x3,y3]) => {
+        ctx.beginPath(); ctx.moveTo(x2,y2); ctx.lineTo(x1,y1); ctx.lineTo(x3,y3); ctx.stroke();
+      });
+
+      requestAnimationFrame(draw);
+    }
+
+    // Spawn beams on interval
+    setInterval(() => { if (beams.length < 3) spawnBeam(); }, 2200);
+
+    // Floating threat labels
+    const labels = [
+      { cls:'safe',   text:'✓ safe · google.com',          left:'4%',  top:'18%', delay:'0s'   },
+      { cls:'danger', text:'⚠ phishing · paypa1-secure.com', left:'58%', top:'12%', delay:'2s'   },
+      { cls:'warn',   text:'? suspicious · bit.ly/xK9m',   left:'68%', top:'70%', delay:'4s'   },
+      { cls:'info',   text:'AI: 0 / 72 engines flagged',   left:'3%',  top:'65%', delay:'1.5s' },
+      { cls:'safe',   text:'✓ VT clean · github.com',      left:'52%', top:'83%', delay:'5s'   },
+      { cls:'danger', text:'⚠ malware · free-win-prize.xyz',left:'10%', top:'80%', delay:'3s'   },
+      { cls:'info',   text:'Claude AI: analyzing...',       left:'70%', top:'38%', delay:'6s'   },
+    ];
+
+    labels.forEach(lb => {
+      const el = document.createElement('div');
+      el.className = 'float-label ' + lb.cls;
+      el.textContent = lb.text;
+      el.style.left = lb.left;
+      el.style.top  = lb.top;
+      el.style.animationDelay = lb.delay;
+      document.body.appendChild(el);
+    });
+
+    resize();
+    initPts();
+    spawnBeam();
+    draw();
+    window.addEventListener('resize', () => { resize(); initPts(); });
+  })();
+  </script>
+</body>
+</html>

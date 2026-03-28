@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ShieldScan — Login</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #080c14; --surface: #0d1320; --surface2: #131b2e;
+      --border: rgba(99,179,255,0.12); --accent: #3b82f6; --accent2: #06b6d4;
+      --safe: #10b981; --danger: #ef4444; --text: #e2e8f0; --muted: #64748b;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Syne', sans-serif; min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+    }
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(59,130,246,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59,130,246,0.04) 1px, transparent 1px);
+      background-size: 40px 40px; pointer-events: none;
+    }
+    .orb { position: fixed; border-radius: 50%; filter: blur(100px); pointer-events: none; }
+    .orb1 { width: 600px; height: 600px; background: rgba(59,130,246,0.07); top: -200px; left: -200px; }
+    .orb2 { width: 500px; height: 500px; background: rgba(6,182,212,0.05); bottom: -200px; right: -200px; }
+
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; padding: 48px 44px; width: 100%; max-width: 440px;
+      position: relative; z-index: 1;
+      box-shadow: 0 40px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(59,130,246,0.05);
+      animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+
+    .logo { display: flex; align-items: center; gap: 12px; margin-bottom: 36px; }
+    .logo-icon {
+      width: 44px; height: 44px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 11px; display: flex; align-items: center; justify-content: center;
+      font-size: 22px; box-shadow: 0 0 20px rgba(59,130,246,0.3);
+    }
+    .logo-text { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+    .logo-text span { color: var(--accent2); }
+
+    .tabs {
+      display: flex; background: var(--surface2); border-radius: 10px;
+      padding: 4px; margin-bottom: 32px; gap: 4px;
+    }
+    .tab {
+      flex: 1; padding: 10px; text-align: center; border-radius: 7px;
+      font-size: 14px; font-weight: 700; cursor: pointer;
+      transition: all 0.2s; color: var(--muted); border: none; background: none;
+      font-family: 'Syne', sans-serif;
+    }
+    .tab.active {
+      background: var(--surface); color: var(--text);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+
+    .form-group { margin-bottom: 18px; }
+    label { display: block; font-size: 12px; font-family: 'DM Mono', monospace;
+      color: var(--muted); margin-bottom: 7px; letter-spacing: 0.5px; }
+    input[type=text], input[type=email], input[type=password] {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 14px; color: var(--text);
+      font-family: 'DM Mono', monospace; font-size: 14px;
+      outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input:focus {
+      border-color: rgba(59,130,246,0.5);
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+    }
+
+    .btn {
+      width: 100%; padding: 14px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none; border-radius: 10px; color: white;
+      font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700;
+      cursor: pointer; transition: opacity 0.2s, transform 0.1s;
+      margin-top: 8px; letter-spacing: 0.3px;
+    }
+    .btn:hover { opacity: 0.9; }
+    .btn:active { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .divider {
+      text-align: center; font-size: 12px; color: var(--muted);
+      font-family: 'DM Mono', monospace; margin: 20px 0;
+      position: relative;
+    }
+    .divider::before, .divider::after {
+      content: ''; position: absolute; top: 50%;
+      width: calc(50% - 30px); height: 1px; background: var(--border);
+    }
+    .divider::before { left: 0; }
+    .divider::after { right: 0; }
+
+    .alert {
+      padding: 12px 14px; border-radius: 9px; font-size: 13px;
+      margin-bottom: 18px; display: none; line-height: 1.5;
+    }
+    .alert.show { display: block; }
+    .alert.error { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25); color: #fca5a5; }
+    .alert.success { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25); color: #6ee7b7; }
+
+    .hint {
+      font-size: 12px; color: var(--muted); text-align: center;
+      margin-top: 20px; font-family: 'DM Mono', monospace; line-height: 1.6;
+    }
+    .hint span { color: var(--accent); }
+
+    .password-wrap { position: relative; }
+    .password-wrap input { padding-right: 44px; }
+    .eye-btn {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer; color: var(--muted);
+      font-size: 16px; padding: 4px;
+    }
+    .eye-btn:hover { color: var(--text); }
+
+    .strength-bar { height: 3px; background: var(--surface2); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+    .strength-fill { height: 100%; border-radius: 2px; transition: width 0.3s, background 0.3s; width: 0; }
+  </style>
+</head>
+<body>
+  <div class="orb orb1"></div>
+  <div class="orb orb2"></div>
+
+  <div class="card">
+    <div class="logo">
+      <div class="logo-icon">🛡️</div>
+      <div class="logo-text">Shield<span>Scan</span></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" id="tabLogin" onclick="switchTab('login')">Sign In</button>
+      <button class="tab" id="tabRegister" onclick="switchTab('register')">Create Account</button>
+    </div>
+
+    <div id="alertBox" class="alert"></div>
+
+    <!-- Login Form -->
+    <div id="loginForm">
+      <div class="form-group">
+        <label>EMAIL</label>
+        <input type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email"/>
+      </div>
+      <div class="form-group">
+        <label>PASSWORD</label>
+        <div class="password-wrap">
+          <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password"/>
+          <button class="eye-btn" onclick="togglePwd('loginPassword', this)">👁️</button>
+        </div>
+      </div>
+      <button class="btn" id="loginBtn" onclick="doLogin()">Sign In →</button>
+      <div class="hint">First user to register becomes <span>admin</span></div>
+    </div>
+
+    <!-- Register Form -->
+    <div id="registerForm" style="display:none">
+      <div class="form-group">
+        <label>USERNAME</label>
+        <input type="text" id="regUsername" placeholder="yourname" autocomplete="username"
+               oninput="checkUsername(this.value)"/>
+      </div>
+      <div class="form-group">
+        <label>EMAIL</label>
+        <input type="email" id="regEmail" placeholder="you@example.com" autocomplete="email"/>
+      </div>
+      <div class="form-group">
+        <label>PASSWORD</label>
+        <div class="password-wrap">
+          <input type="password" id="regPassword" placeholder="Min. 6 characters"
+                 autocomplete="new-password" oninput="checkStrength(this.value)"/>
+          <button class="eye-btn" onclick="togglePwd('regPassword', this)">👁️</button>
+        </div>
+        <div class="strength-bar"><div class="strength-fill" id="strengthBar"></div></div>
+      </div>
+      <button class="btn" id="registerBtn" onclick="doRegister()">Create Account →</button>
+      <div class="hint">Already have an account? <span style="cursor:pointer" onclick="switchTab('login')">Sign in</span></div>
+    </div>
+  </div>
+
+  <script>
+    // Check if already logged in
+    fetch('/api/auth/me').then(r => {
+      if (r.ok) window.location.href = '/';
+    }).catch(() => {});
+
+    function switchTab(tab) {
+      const isLogin = tab === 'login';
+      document.getElementById('tabLogin').classList.toggle('active', isLogin);
+      document.getElementById('tabRegister').classList.toggle('active', !isLogin);
+      document.getElementById('loginForm').style.display = isLogin ? 'block' : 'none';
+      document.getElementById('registerForm').style.display = isLogin ? 'none' : 'block';
+      hideAlert();
+    }
+
+    function showAlert(msg, type = 'error') {
+      const el = document.getElementById('alertBox');
+      el.textContent = msg;
+      el.className = 'alert show ' + type;
+    }
+    function hideAlert() { document.getElementById('alertBox').classList.remove('show'); }
+
+    function togglePwd(id, btn) {
+      const inp = document.getElementById(id);
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+      btn.textContent = inp.type === 'password' ? '👁️' : '🙈';
+    }
+
+    function checkStrength(val) {
+      const bar = document.getElementById('strengthBar');
+      let score = 0;
+      if (val.length >= 6) score++;
+      if (val.length >= 10) score++;
+      if (/[A-Z]/.test(val)) score++;
+      if (/[0-9]/.test(val)) score++;
+      if (/[^A-Za-z0-9]/.test(val)) score++;
+      const pct = (score / 5) * 100;
+      const colors = ['', '#ef4444', '#f59e0b', '#f59e0b', '#10b981', '#10b981'];
+      bar.style.width = pct + '%';
+      bar.style.background = colors[score] || '#ef4444';
+    }
+
+    function checkUsername(val) {
+      // basic client-side validation only
+    }
+
+    async function doLogin() {
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      if (!email || !password) { showAlert('Please fill in all fields'); return; }
+
+      const btn = document.getElementById('loginBtn');
+      btn.disabled = true; btn.textContent = 'Signing in...';
+
+      try {
+        const r = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        showAlert(`Welcome back, ${d.username}! Redirecting...`, 'success');
+        setTimeout(() => {
+          window.location.href = d.role === 'admin' ? '/admin.html' : '/';
+        }, 800);
+      } catch (err) {
+        showAlert(err.message);
+        btn.disabled = false; btn.textContent = 'Sign In →';
+      }
+    }
+
+    async function doRegister() {
+      const username = document.getElementById('regUsername').value.trim();
+      const email = document.getElementById('regEmail').value.trim();
+      const password = document.getElementById('regPassword').value;
+      if (!username || !email || !password) { showAlert('Please fill in all fields'); return; }
+
+      const btn = document.getElementById('registerBtn');
+      btn.disabled = true; btn.textContent = 'Creating account...';
+
+      try {
+        const r = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, email, password })
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        showAlert(d.message + ' Redirecting...', 'success');
+        setTimeout(() => {
+          window.location.href = d.role === 'admin' ? '/admin.html' : '/';
+        }, 800);
+      } catch (err) {
+        showAlert(err.message);
+        btn.disabled = false; btn.textContent = 'Create Account →';
+      }
+    }
+
+    // Enter key support
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      const loginVisible = document.getElementById('loginForm').style.display !== 'none';
+      if (loginVisible) doLogin(); else doRegister();
+    });
+  </script>
+</body>
+</html>

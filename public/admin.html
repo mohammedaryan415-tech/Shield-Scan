@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ShieldScan — Admin Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #080c14; --surface: #0d1320; --surface2: #131b2e; --surface3: #1a2540;
+      --border: rgba(99,179,255,0.12); --accent: #3b82f6; --accent2: #06b6d4;
+      --safe: #10b981; --warn: #f59e0b; --danger: #ef4444; --unknown: #8b5cf6;
+      --text: #e2e8f0; --muted: #64748b;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; min-height: 100vh; }
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background-image: linear-gradient(rgba(59,130,246,0.025) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(59,130,246,0.025) 1px, transparent 1px);
+      background-size: 40px 40px; pointer-events: none; z-index: 0;
+    }
+
+    /* Nav */
+    nav {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 0 32px; display: flex; align-items: center; justify-content: space-between;
+      height: 60px; position: sticky; top: 0; z-index: 100;
+    }
+    .nav-logo { display: flex; align-items: center; gap: 10px; }
+    .nav-logo-icon {
+      width: 34px; height: 34px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px;
+    }
+    .nav-logo-text { font-size: 17px; font-weight: 800; letter-spacing: -0.3px; }
+    .nav-logo-text span { color: var(--accent2); }
+    .nav-badge {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      background: rgba(59,130,246,0.15); color: var(--accent);
+      border: 1px solid rgba(59,130,246,0.2); padding: 3px 8px; border-radius: 10px;
+      letter-spacing: 1px;
+    }
+    .nav-right { display: flex; align-items: center; gap: 12px; }
+    .nav-user { font-size: 13px; color: var(--muted); font-family: 'DM Mono', monospace; }
+    .nav-user strong { color: var(--text); }
+    .btn-sm {
+      font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700;
+      padding: 7px 14px; border-radius: 8px; border: none; cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+    .btn-outline:hover { color: var(--text); border-color: rgba(99,179,255,0.3); }
+    .btn-accent { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: white; }
+
+    /* Layout */
+    .layout { display: flex; min-height: calc(100vh - 60px); position: relative; z-index: 1; }
+    .sidebar {
+      width: 220px; background: var(--surface); border-right: 1px solid var(--border);
+      padding: 24px 12px; flex-shrink: 0;
+    }
+    .sidebar-label { font-size: 10px; color: var(--muted); letter-spacing: 2px;
+      text-transform: uppercase; font-family: 'DM Mono', monospace; padding: 0 10px; margin-bottom: 8px; }
+    .sidebar-item {
+      display: flex; align-items: center; gap: 10px; padding: 9px 10px;
+      border-radius: 8px; cursor: pointer; transition: all 0.15s;
+      font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 2px;
+    }
+    .sidebar-item:hover { background: var(--surface2); color: var(--text); }
+    .sidebar-item.active { background: rgba(59,130,246,0.12); color: var(--accent); }
+    .sidebar-icon { font-size: 15px; }
+
+    /* Main */
+    .main { flex: 1; padding: 32px; overflow-y: auto; }
+    .page { display: none; animation: fadeIn 0.3s ease; }
+    .page.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+    .page-title { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 6px; }
+    .page-sub { font-size: 13px; color: var(--muted); margin-bottom: 28px; font-family: 'DM Mono', monospace; }
+
+    /* Stat Cards */
+    .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      padding: 22px; position: relative; overflow: hidden;
+    }
+    .stat-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    }
+    .stat-card.blue::before { background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+    .stat-card.green::before { background: var(--safe); }
+    .stat-card.yellow::before { background: var(--warn); }
+    .stat-card.red::before { background: var(--danger); }
+    .stat-card-label { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace;
+      letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
+    .stat-card-num { font-size: 36px; font-weight: 800; font-family: 'DM Mono', monospace; line-height: 1; }
+    .stat-card.blue .stat-card-num { color: var(--accent); }
+    .stat-card.green .stat-card-num { color: var(--safe); }
+    .stat-card.yellow .stat-card-num { color: var(--warn); }
+    .stat-card.red .stat-card-num { color: var(--danger); }
+    .stat-card-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    /* Table */
+    .table-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
+    }
+    .table-header {
+      padding: 18px 22px; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .table-title { font-size: 14px; font-weight: 700; }
+    .table-count { font-size: 12px; color: var(--muted); font-family: 'DM Mono', monospace; }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left; padding: 12px 22px; font-size: 11px;
+      color: var(--muted); font-family: 'DM Mono', monospace; letter-spacing: 1px;
+      text-transform: uppercase; background: var(--surface2); font-weight: 500;
+    }
+    td { padding: 14px 22px; border-top: 1px solid var(--border); font-size: 13px; }
+    tr:hover td { background: rgba(59,130,246,0.03); }
+
+    .badge {
+      display: inline-block; padding: 3px 9px; border-radius: 20px;
+      font-size: 11px; font-family: 'DM Mono', monospace; letter-spacing: 0.5px; font-weight: 500;
+    }
+    .badge.safe { background: rgba(16,185,129,0.12); color: var(--safe); }
+    .badge.dangerous { background: rgba(239,68,68,0.12); color: var(--danger); }
+    .badge.suspicious { background: rgba(245,158,11,0.12); color: var(--warn); }
+    .badge.unknown { background: rgba(139,92,246,0.12); color: var(--unknown); }
+    .badge.admin { background: rgba(59,130,246,0.15); color: var(--accent); }
+    .badge.user { background: rgba(100,116,139,0.15); color: var(--muted); }
+
+    .avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 800; color: white; flex-shrink: 0;
+    }
+    .user-cell { display: flex; align-items: center; gap: 10px; }
+    .user-name { font-weight: 600; }
+    .user-email { font-size: 12px; color: var(--muted); font-family: 'DM Mono', monospace; }
+
+    .mini-bar { height: 4px; background: var(--surface2); border-radius: 2px; margin-top: 4px; width: 80px; overflow: hidden; }
+    .mini-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+
+    .detail-btn {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); font-family: 'DM Mono', monospace; font-size: 11px;
+      padding: 5px 10px; border-radius: 6px; cursor: pointer; transition: all 0.15s;
+    }
+    .detail-btn:hover { border-color: rgba(59,130,246,0.4); color: var(--accent); }
+
+    /* User Detail Modal */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px); z-index: 200; align-items: center; justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+      width: 90%; max-width: 700px; max-height: 80vh; overflow-y: auto;
+      animation: popIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes popIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .modal-head {
+      padding: 24px 28px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; background: var(--surface); z-index: 1;
+    }
+    .modal-title { font-size: 17px; font-weight: 800; }
+    .modal-close {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--muted); width: 32px; height: 32px; border-radius: 8px;
+      cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;
+    }
+    .modal-close:hover { color: var(--text); }
+    .modal-body { padding: 24px 28px; }
+
+    .user-stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+    .user-stat-box {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px; text-align: center;
+    }
+    .user-stat-num { font-size: 24px; font-weight: 800; font-family: 'DM Mono', monospace; }
+    .user-stat-lbl { font-size: 10px; color: var(--muted); letter-spacing: 1px; margin-top: 3px; }
+
+    .scan-mini-list { display: flex; flex-direction: column; gap: 6px; }
+    .scan-mini-item {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+      padding: 10px 14px; display: flex; align-items: center; gap: 10px;
+    }
+    .scan-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .scan-dot.safe { background: var(--safe); }
+    .scan-dot.dangerous { background: var(--danger); }
+    .scan-dot.suspicious { background: var(--warn); }
+    .scan-dot.unknown { background: var(--unknown); }
+    .scan-url { flex: 1; font-family: 'DM Mono', monospace; font-size: 12px;
+      color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .scan-time { font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+    .empty { text-align: center; padding: 40px; color: var(--muted); font-size: 14px; }
+
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .stat-grid { grid-template-columns: repeat(2, 1fr); }
+      .user-stat-row { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="nav-logo">
+      <div class="nav-logo-icon">🛡️</div>
+      <div class="nav-logo-text">Shield<span>Scan</span></div>
+      <div class="nav-badge">ADMIN</div>
+    </div>
+    <div class="nav-right">
+      <div class="nav-user">Signed in as <strong id="navUsername">—</strong></div>
+      <button class="btn-sm btn-outline" onclick="window.location.href='/'">← Scanner</button>
+      <button class="btn-sm btn-outline" onclick="doLogout()">Logout</button>
+    </div>
+  </nav>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-label">Dashboard</div>
+      <div class="sidebar-item active" onclick="showPage('overview')">
+        <span class="sidebar-icon">📊</span> Overview
+      </div>
+      <div class="sidebar-item" onclick="showPage('users')">
+        <span class="sidebar-icon">👥</span> All Users
+      </div>
+      <div class="sidebar-item" onclick="showPage('scans')">
+        <span class="sidebar-icon">🔍</span> Recent Scans
+      </div>
+    </aside>
+
+    <main class="main">
+      <!-- Overview -->
+      <div class="page active" id="pageOverview">
+        <div class="page-title">Overview</div>
+        <div class="page-sub">Platform-wide statistics</div>
+        <div class="stat-grid">
+          <div class="stat-card blue">
+            <div class="stat-card-label">Total Scans</div>
+            <div class="stat-card-num" id="ovTotal">—</div>
+          </div>
+          <div class="stat-card green">
+            <div class="stat-card-label">Safe</div>
+            <div class="stat-card-num" id="ovSafe">—</div>
+          </div>
+          <div class="stat-card yellow">
+            <div class="stat-card-label">Suspicious</div>
+            <div class="stat-card-num" id="ovSusp">—</div>
+          </div>
+          <div class="stat-card red">
+            <div class="stat-card-label">Dangerous</div>
+            <div class="stat-card-num" id="ovDanger">—</div>
+          </div>
+        </div>
+        <div class="stat-grid" style="grid-template-columns: repeat(2,1fr)">
+          <div class="stat-card blue">
+            <div class="stat-card-label">Registered Users</div>
+            <div class="stat-card-num" id="ovUsers">—</div>
+          </div>
+          <div class="stat-card green">
+            <div class="stat-card-label">Avg Scans / User</div>
+            <div class="stat-card-num" id="ovAvg">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Users -->
+      <div class="page" id="pageUsers">
+        <div class="page-title">All Users</div>
+        <div class="page-sub" id="userPageSub">Loading users...</div>
+        <div class="table-card">
+          <div class="table-header">
+            <div class="table-title">User Accounts</div>
+            <div class="table-count" id="userCount">—</div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Role</th>
+                <th>Total Scans</th>
+                <th>Safe / Susp / Danger</th>
+                <th>Last Active</th>
+                <th>Joined</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="usersTableBody">
+              <tr><td colspan="7" class="empty">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Recent Scans -->
+      <div class="page" id="pageScans">
+        <div class="page-title">Recent Scans</div>
+        <div class="page-sub">All scans across all users</div>
+        <div class="table-card">
+          <div class="table-header">
+            <div class="table-title">Scan History</div>
+            <div class="table-count" id="scansCount">—</div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>URL</th>
+                <th>Verdict</th>
+                <th>Risk</th>
+                <th>User</th>
+                <th>Scanned</th>
+              </tr>
+            </thead>
+            <tbody id="scansTableBody">
+              <tr><td colspan="5" class="empty">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- User Detail Modal -->
+  <div class="modal-overlay" id="userModal">
+    <div class="modal">
+      <div class="modal-head">
+        <div class="modal-title" id="modalTitle">User Detail</div>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body" id="modalBody">Loading...</div>
+    </div>
+  </div>
+
+  <script>
+    let allUsers = [];
+
+    // Auth check
+    fetch('/api/auth/me').then(r => {
+      if (!r.ok) { window.location.href = '/login.html'; return null; }
+      return r.json();
+    }).then(u => {
+      if (!u) return;
+      if (u.role !== 'admin') { window.location.href = '/'; return; }
+      document.getElementById('navUsername').textContent = u.username;
+      loadAll();
+    });
+
+    async function loadAll() {
+      await Promise.all([loadStats(), loadUsers(), loadRecentScans()]);
+    }
+
+    async function loadStats() {
+      const [statsR, usersR] = await Promise.all([
+        fetch('/api/stats'), fetch('/api/auth/admin/users')
+      ]);
+      const stats = await statsR.json();
+      const users = await usersR.json();
+
+      document.getElementById('ovTotal').textContent = stats.total_scans || 0;
+      document.getElementById('ovSafe').textContent = stats.safe_count || 0;
+      document.getElementById('ovSusp').textContent = stats.suspicious_count || 0;
+      document.getElementById('ovDanger').textContent = stats.dangerous_count || 0;
+      document.getElementById('ovUsers').textContent = users.length;
+      const avg = users.length ? (stats.total_scans / users.length).toFixed(1) : 0;
+      document.getElementById('ovAvg').textContent = avg;
+    }
+
+    async function loadUsers() {
+      const r = await fetch('/api/auth/admin/users');
+      allUsers = await r.json();
+      document.getElementById('userCount').textContent = allUsers.length + ' users';
+      document.getElementById('userPageSub').textContent = allUsers.length + ' registered accounts';
+
+      const maxScans = Math.max(...allUsers.map(u => u.total_scans), 1);
+      const tbody = document.getElementById('usersTableBody');
+
+      if (!allUsers.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">No users yet</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = allUsers.map(u => `
+        <tr>
+          <td>
+            <div class="user-cell">
+              <div class="avatar">${u.username[0].toUpperCase()}</div>
+              <div>
+                <div class="user-name">${esc(u.username)}</div>
+                <div class="user-email">${esc(u.email)}</div>
+              </div>
+            </div>
+          </td>
+          <td><span class="badge ${u.role}">${u.role}</span></td>
+          <td>
+            <div style="font-weight:700;font-family:'DM Mono',monospace">${u.total_scans}</div>
+            <div class="mini-bar"><div class="mini-fill" style="width:${Math.round(u.total_scans/maxScans*100)}%"></div></div>
+          </td>
+          <td>
+            <span style="color:var(--safe)">${u.safe_count}</span> /
+            <span style="color:var(--warn)">${u.suspicious_count}</span> /
+            <span style="color:var(--danger)">${u.dangerous_count}</span>
+          </td>
+          <td style="color:var(--muted);font-family:'DM Mono',monospace;font-size:12px">
+            ${u.last_active ? timeAgo(u.last_active) : 'Never'}
+          </td>
+          <td style="color:var(--muted);font-family:'DM Mono',monospace;font-size:12px">
+            ${fmtDate(u.created_at)}
+          </td>
+          <td><button class="detail-btn" onclick="openUserDetail(${u.id})">Details →</button></td>
+        </tr>
+      `).join('');
+    }
+
+    async function loadRecentScans() {
+      const r = await fetch('/api/recent?limit=50');
+      const scans = await r.json();
+      document.getElementById('scansCount').textContent = scans.length + ' scans';
+
+      const tbody = document.getElementById('scansTableBody');
+      if (!scans.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty">No scans yet</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = scans.map(s => `
+        <tr>
+          <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--muted);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            ${esc(s.url)}
+          </td>
+          <td><span class="badge ${s.verdict}">${s.verdict}</span></td>
+          <td>
+            <span style="font-family:'DM Mono',monospace;font-weight:700;color:${riskColor(s.risk_score)}">${s.risk_score}</span>
+            <span style="font-size:11px;color:var(--muted)">/100</span>
+          </td>
+          <td>
+            ${s.username
+              ? `<div class="user-cell"><div class="avatar" style="width:24px;height:24px;font-size:11px">${s.username[0].toUpperCase()}</div><span style="font-size:13px">${esc(s.username)}</span></div>`
+              : '<span style="color:var(--muted);font-size:12px">Guest</span>'}
+          </td>
+          <td style="color:var(--muted);font-family:'DM Mono',monospace;font-size:12px">${timeAgo(s.created_at)}</td>
+        </tr>
+      `).join('');
+    }
+
+    async function openUserDetail(userId) {
+      document.getElementById('userModal').classList.add('show');
+      document.getElementById('modalBody').innerHTML = '<div class="empty">Loading...</div>';
+
+      const r = await fetch(`/api/auth/admin/users/${userId}`);
+      const u = await r.json();
+      document.getElementById('modalTitle').textContent = `@${u.username}`;
+
+      const scansHtml = u.scans && u.scans.length
+        ? u.scans.map(s => `
+            <div class="scan-mini-item">
+              <div class="scan-dot ${s.verdict}"></div>
+              <div class="scan-url">${esc(s.url)}</div>
+              <span class="badge ${s.verdict}" style="flex-shrink:0">${s.verdict}</span>
+              <div class="scan-time">${timeAgo(s.created_at)}</div>
+            </div>
+          `).join('')
+        : '<div class="empty">No scans yet</div>';
+
+      document.getElementById('modalBody').innerHTML = `
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:24px">
+          <div class="avatar" style="width:56px;height:56px;font-size:22px">${u.username[0].toUpperCase()}</div>
+          <div>
+            <div style="font-size:18px;font-weight:800">${esc(u.username)}</div>
+            <div style="font-size:13px;color:var(--muted);font-family:'DM Mono',monospace">${esc(u.email)}</div>
+            <span class="badge ${u.role}" style="margin-top:4px;display:inline-block">${u.role}</span>
+          </div>
+        </div>
+        <div class="user-stat-row">
+          <div class="user-stat-box">
+            <div class="user-stat-num" style="color:var(--accent)">${u.total_scans}</div>
+            <div class="user-stat-lbl">TOTAL SCANS</div>
+          </div>
+          <div class="user-stat-box">
+            <div class="user-stat-num" style="color:var(--safe)">${u.safe_count}</div>
+            <div class="user-stat-lbl">SAFE</div>
+          </div>
+          <div class="user-stat-box">
+            <div class="user-stat-num" style="color:var(--warn)">${u.suspicious_count}</div>
+            <div class="user-stat-lbl">SUSPICIOUS</div>
+          </div>
+          <div class="user-stat-box">
+            <div class="user-stat-num" style="color:var(--danger)">${u.dangerous_count}</div>
+            <div class="user-stat-lbl">DANGEROUS</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:16px">
+          Joined ${fmtDate(u.created_at)} · Last active ${u.last_active ? timeAgo(u.last_active) : 'Never'}
+        </div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px">Scan History (last 50)</div>
+        <div class="scan-mini-list">${scansHtml}</div>
+      `;
+    }
+
+    function closeModal() { document.getElementById('userModal').classList.remove('show'); }
+    document.getElementById('userModal').addEventListener('click', e => {
+      if (e.target === document.getElementById('userModal')) closeModal();
+    });
+
+    function showPage(page) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.sidebar-item').forEach(s => s.classList.remove('active'));
+      document.getElementById('page' + page.charAt(0).toUpperCase() + page.slice(1)).classList.add('active');
+      event.currentTarget.classList.add('active');
+    }
+
+    async function doLogout() {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/login.html';
+    }
+
+    function riskColor(score) {
+      if (score >= 60) return 'var(--danger)';
+      if (score >= 25) return 'var(--warn)';
+      return 'var(--safe)';
+    }
+
+    function esc(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function timeAgo(dt) {
+      const diff = Date.now() - new Date(dt).getTime();
+      const m = Math.floor(diff / 60000);
+      if (m < 1) return 'just now';
+      if (m < 60) return m + 'm ago';
+      const h = Math.floor(m / 60);
+      if (h < 24) return h + 'h ago';
+      return Math.floor(h / 24) + 'd ago';
+    }
+
+    function fmtDate(dt) {
+      return new Date(dt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+  </script>
+</body>
+</html>
